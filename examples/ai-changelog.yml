@@ -1,0 +1,29 @@
+# Example: AI-enhanced changelog
+name: AI Changelog
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate AI Changelog
+        uses: jimjammcjames/ai-changelog-action@v1
+        with:
+          mode: ai
+          ai-provider: openai
+          ai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          ai-model: gpt-4o-mini
+          output: both
+          exclude-types: chore
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

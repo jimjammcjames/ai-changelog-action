@@ -1,0 +1,25 @@
+# Example: Generate changelog on tag push
+name: Changelog on Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Changelog
+        uses: jimjammcjames/ai-changelog-action@v1
+        with:
+          output: both
+          exclude-types: chore,ci
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

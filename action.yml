@@ -1,0 +1,82 @@
+name: 'AI Changelog Generator'
+description: 'Automatically generate beautiful, categorized changelogs from your git commits and pull requests using AI.'
+author: 'DuglePlex'
+
+branding:
+  icon: 'file-text'
+  color: 'blue'
+
+inputs:
+  mode:
+    description: 'Generation mode: "conventional" (rule-based, default) or "ai" (AI-enhanced with OpenAI/Anthropic)'
+    required: false
+    default: 'conventional'
+  ai-provider:
+    description: 'AI provider when mode=ai. Options: "openai", "anthropic"'
+    required: false
+    default: 'openai'
+  ai-api-key:
+    description: 'API key for the AI provider (required when mode=ai)'
+    required: false
+  ai-model:
+    description: 'Model to use for AI generation'
+    required: false
+    default: 'gpt-4o-mini'
+  output:
+    description: 'Output target: "file" (write CHANGELOG.md), "release" (GitHub release notes), "both", or "stdout"'
+    required: false
+    default: 'file'
+  changelog-path:
+    description: 'Path for the changelog file when output includes "file"'
+    required: false
+    default: 'CHANGELOG.md'
+  include-range:
+    description: 'Git revision range (e.g., "v1.0.0..HEAD"). Auto-detected if not set.'
+    required: false
+  categories:
+    description: 'JSON map of custom category labels, e.g. {"feat":"✨ Features","fix":"🐛 Bug Fixes"}'
+    required: false
+  group-by:
+    description: 'How to group entries: "category" (default), "scope", "date"'
+    required: false
+    default: 'category'
+  include-authors:
+    description: 'Show commit authors in changelog entries'
+    required: false
+    default: 'true'
+  include-pr-links:
+    description: 'Link to pull requests when available'
+    required: false
+    default: 'true'
+  include-compare-link:
+    description: 'Add a compare link between versions'
+    required: false
+    default: 'true'
+  version:
+    description: 'Version label for this changelog section (e.g., "v2.1.0"). Auto-detected from tags if not set.'
+    required: false
+  header:
+    description: 'Custom header for the changelog'
+    required: false
+    default: '# Changelog'
+  exclude-types:
+    description: 'Comma-separated commit types to exclude (e.g., "chore,ci,style")'
+    required: false
+  max-commits:
+    description: 'Maximum number of commits to process'
+    required: false
+    default: '500'
+
+outputs:
+  changelog:
+    description: 'The generated changelog markdown content'
+  version:
+    description: 'The detected or specified version label'
+  commit-count:
+    description: 'Number of commits processed'
+  categories-found:
+    description: 'JSON array of category names that had entries'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
