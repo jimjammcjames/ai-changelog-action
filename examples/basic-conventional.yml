@@ -1,0 +1,27 @@
+# Example: Basic conventional commit changelog on tag push
+# The simplest setup — free, no AI, no API key needed.
+name: Basic Changelog
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Changelog
+        uses: jimjammcjames/ai-changelog-action@v1
+        with:
+          output: both
+          include-authors: true
+          include-pr-links: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

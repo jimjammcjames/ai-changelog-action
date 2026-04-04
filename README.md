@@ -1,24 +1,58 @@
-# AI Changelog Generator
+<div align="center">
 
-> Automatically generate beautiful, categorized changelogs from your git commits and pull requests — with optional AI enhancement.
+# 📋 AI Changelog Generator
 
-[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-AI%20Changelog-blue?logo=github)](https://github.com/marketplace/actions/ai-changelog-generator)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+**Automatically generate beautiful, categorized changelogs from git commits and pull requests — with optional AI enhancement.**
+
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-AI%20Changelog%20Generator-blue?logo=github&style=for-the-badge)](https://github.com/marketplace/actions/ai-changelog-generator)
+[![CI](https://img.shields.io/github/actions/workflow/status/jimjammcjames/ai-changelog-action/ci.yml?label=CI&logo=github&style=for-the-badge)](https://github.com/jimjammcjames/ai-changelog-action/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![npm version](https://img.shields.io/npm/v/ai-changelog-action?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/ai-changelog-action)
+[![GitHub Stars](https://img.shields.io/github/stars/jimjammcjames/ai-changelog-action?style=for-the-badge&logo=github)](https://github.com/jimjammcjames/ai-changelog-action)
+
+[Quick Start](#-quick-start) · [Examples](examples/) · [Inputs](#-inputs) · [Pricing](#-pricing) · [Contributing](CONTRIBUTING.md)
+
+</div>
+
+---
 
 ## Why?
 
-Manually writing changelogs is tedious. `ai-changelog-action` reads your git history, categorizes commits using [Conventional Commits](https://www.conventionalcommits.org/) conventions (or AI), and outputs a clean, emoji-rich markdown changelog — ready for your repo or GitHub Release.
+Manually writing changelogs is tedious and error-prone. **AI Changelog Generator** reads your git history, categorizes commits using [Conventional Commits](https://www.conventionalcommits.org/) conventions (or AI), and outputs a clean, emoji-rich markdown changelog — ready for your repo or GitHub Release.
 
-### Two modes
+**Three lines of YAML. That's it.**
 
-| Mode | Cost | Best for |
-|------|------|----------|
-| **Conventional** (default) | Free forever | Teams using conventional commits |
-| **AI-enhanced** | Uses your OpenAI/Anthropic key | Any commit style — AI categorizes & rewrites |
+```yaml
+- uses: jimjammcjames/ai-changelog-action@v1
+  with:
+    output: both
+```
 
-## Quick Start
+---
 
-### Basic (conventional commits)
+## ✨ Feature Comparison
+
+| Feature | Free (Conventional) | AI-Enhanced |
+|---------|:-------------------:|:-----------:|
+| Conventional commit parsing | ✅ | ✅ |
+| Emoji-rich categories | ✅ | ✅ |
+| PR & commit links | ✅ | ✅ |
+| Author attribution | ✅ | ✅ |
+| Version compare links | ✅ | ✅ |
+| Group by category / scope / date | ✅ | ✅ |
+| Custom category labels | ✅ | ✅ |
+| Write to file / release / both | ✅ | ✅ |
+| AI-powered commit categorization | — | ✅ |
+| Natural language rewriting | — | ✅ |
+| Non-conventional commit support | Heuristic | ✅ Smart |
+| AI provider choice (OpenAI / Anthropic) | — | ✅ |
+| Cost | **Free forever** | Your API key |
+
+---
+
+## 🚀 Quick Start
+
+### Basic — Conventional Commits (Free)
 
 ```yaml
 name: Generate Changelog
@@ -41,7 +75,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-### AI-enhanced
+### AI-Enhanced — Any Commit Style
 
 ```yaml
       - uses: jimjammcjames/ai-changelog-action@v1
@@ -49,10 +83,14 @@ jobs:
           mode: ai
           ai-api-key: ${{ secrets.OPENAI_API_KEY }}
           ai-model: gpt-4o-mini
-          output: file
+          output: both
 ```
 
-## Inputs
+> 💡 See more workflow examples in the [`examples/`](examples/) directory.
+
+---
+
+## 📥 Inputs
 
 | Input | Default | Description |
 |-------|---------|-------------|
@@ -70,10 +108,10 @@ jobs:
 | `include-compare-link` | `true` | Add version compare link |
 | `version` | auto | Version label (auto-detected from tags) |
 | `header` | `# Changelog` | Custom header text |
-| `exclude-types` | — | Comma-separated types to exclude |
+| `exclude-types` | — | Comma-separated types to exclude (e.g., `chore,ci,style`) |
 | `max-commits` | `500` | Max commits to process |
 
-## Outputs
+## 📤 Outputs
 
 | Output | Description |
 |--------|-------------|
@@ -82,7 +120,9 @@ jobs:
 | `commit-count` | Number of commits processed |
 | `categories-found` | JSON array of categories with entries |
 
-## Example Output
+---
+
+## 📝 Example Output
 
 ```markdown
 # Changelog
@@ -93,19 +133,21 @@ jobs:
 
 ### ✨ Features
 
-- **auth:** Add OAuth2 support for GitHub login ([#42](https://github.com/you/repo/pull/42)) ([a1b2c3d](https://github.com/you/repo/commit/a1b2c3d)) — @alice
-- Implement dark mode toggle ([#38](https://github.com/you/repo/pull/38)) ([d4e5f6g](https://github.com/you/repo/commit/d4e5f6g)) — @bob
+- **auth:** Add OAuth2 support for GitHub login (#42) (a1b2c3d) — @alice
+- Implement dark mode toggle (#38) (d4e5f6g) — @bob
 
 ### 🐛 Bug Fixes
 
-- **api:** Fix rate limiting on /search endpoint ([e7f8g9h](https://github.com/you/repo/commit/e7f8g9h)) — @charlie
+- **api:** Fix rate limiting on /search endpoint (e7f8g9h) — @charlie
 
 ### 📚 Documentation
 
-- Update API reference for v2 endpoints ([h0i1j2k](https://github.com/you/repo/commit/h0i1j2k)) — @alice
+- Update API reference for v2 endpoints (h0i1j2k) — @alice
 ```
 
-## Custom Categories
+---
+
+## 🎨 Custom Categories
 
 Override the default emoji labels:
 
@@ -116,9 +158,11 @@ Override the default emoji labels:
             {"feat":"🚀 New Features","fix":"🔧 Fixes","docs":"📖 Docs"}
 ```
 
-## Advanced Examples
+---
 
-### On every push to main (prepend to CHANGELOG.md)
+## 🔧 Advanced Usage
+
+### Auto-update CHANGELOG.md on every push to main
 
 ```yaml
 on:
@@ -142,7 +186,7 @@ jobs:
           file_pattern: CHANGELOG.md
 ```
 
-### Use changelog output in another step
+### Use changelog output in a downstream step
 
 ```yaml
       - uses: jimjammcjames/ai-changelog-action@v1
@@ -152,7 +196,7 @@ jobs:
       - run: echo "${{ steps.changelog.outputs.changelog }}"
 ```
 
-### Exclude noise
+### Filter out noise
 
 ```yaml
       - uses: jimjammcjames/ai-changelog-action@v1
@@ -160,7 +204,28 @@ jobs:
           exclude-types: chore,ci,style,test
 ```
 
-## Conventional Commit Types
+### Group by scope instead of category
+
+```yaml
+      - uses: jimjammcjames/ai-changelog-action@v1
+        with:
+          group-by: scope
+```
+
+### Use Anthropic Claude instead of OpenAI
+
+```yaml
+      - uses: jimjammcjames/ai-changelog-action@v1
+        with:
+          mode: ai
+          ai-provider: anthropic
+          ai-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          ai-model: claude-sonnet-4-20250514
+```
+
+---
+
+## 📋 Conventional Commit Types
 
 The action recognizes these types out of the box:
 
@@ -178,7 +243,27 @@ The action recognizes these types out of the box:
 | `chore` | Chores | 🧹 |
 | `revert` | Reverts | ⏪ |
 
-Non-conventional commits are heuristically categorized or placed under "📝 Other Changes".
+Non-conventional commits are heuristically categorized or placed under "📝 Other Changes". In **AI mode**, non-conventional commits are intelligently categorized by the model.
+
+---
+
+## 💰 Pricing
+
+| Tier | Price | What you get |
+|------|-------|-------------|
+| **Free** | $0 | Conventional commit mode — full-featured, no limits |
+| **AI-Enhanced** | Bring your own API key | OpenAI or Anthropic — you pay your provider directly |
+
+<!-- TODO: Replace with Polar.sh checkout links when ready
+| **Pro** | $X/mo | Managed AI, priority support, team analytics |
+[Get Pro →](https://polar.sh/jimjammcjames/ai-changelog-action)
+-->
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Built by AI Agents 🤖
 

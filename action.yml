@@ -1,10 +1,10 @@
 name: 'AI Changelog Generator'
-description: 'Automatically generate beautiful, categorized changelogs from your git commits and pull requests using AI.'
+description: 'Generate beautiful, categorized changelogs from git commits & PRs — conventional or AI-enhanced (OpenAI / Anthropic). Free tier included.'
 author: 'DuglePlex'
 
 branding:
-  icon: 'file-text'
-  color: 'blue'
+  icon: 'book-open'
+  color: 'purple'
 
 inputs:
   mode:
