@@ -1,10 +1,26 @@
 {
   "name": "ai-changelog-action",
-  "version": "1.0.0",
-  "description": "AI-powered changelog generator from git commits and PRs",
+  "version": "1.1.0",
+  "description": "AI-powered changelog generator from git commits and PRs — GitHub Action + CLI",
   "main": "dist/index.js",
+  "bin": {
+    "ai-changelog": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "action.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./core": "./dist/core.js",
+    "./cli": "./dist/cli.js"
+  },
   "scripts": {
     "build": "ncc build src/index.ts -o dist --source-map --license licenses.txt",
+    "build:cli": "ncc build src/cli.ts -o dist-cli --source-map --license licenses.txt && cp dist-cli/index.js dist/cli.js && cp dist-cli/index.js.map dist/cli.js.map && rm -rf dist-cli",
+    "build:all": "npm run build && npm run build:cli",
     "test": "jest --coverage",
     "lint": "eslint src/ --ext .ts",
     "typecheck": "tsc --noEmit"
@@ -14,7 +30,9 @@
     "changelog",
     "ai",
     "release-notes",
-    "conventional-commits"
+    "conventional-commits",
+    "cli",
+    "semver"
   ],
   "author": "DuglePlex",
   "license": "MIT",

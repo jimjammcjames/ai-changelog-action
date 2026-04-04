@@ -66,6 +66,12 @@ inputs:
     description: 'Maximum number of commits to process'
     required: false
     default: '500'
+  license-key:
+    description: 'Polar.sh license key for premium features (breaking change analysis, version advisor)'
+    required: false
+  polar-org-id:
+    description: 'Polar.sh organization ID for license validation (optional, improves validation accuracy)'
+    required: false
 
 outputs:
   changelog:

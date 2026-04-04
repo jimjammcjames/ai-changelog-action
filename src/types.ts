@@ -36,10 +36,21 @@ export interface ChangelogSection {
 
 export interface ChangelogResult {
   markdown: string;
+  json?: ChangelogJSON;
+  html?: string;
   version: string;
   commitCount: number;
   categoriesFound: string[];
 }
+
+export interface ChangelogJSON {
+  version: string;
+  date: string;
+  sections: { category: string; entries: ChangelogEntry[] }[];
+  commitCount: number;
+}
+
+export type OutputFormat = 'markdown' | 'json' | 'html';
 
 export interface ActionInputs {
   mode: 'conventional' | 'ai';
@@ -58,4 +69,7 @@ export interface ActionInputs {
   header: string;
   excludeTypes: string[];
   maxCommits: number;
+  outputFormat: OutputFormat;
+  licenseKey: string;
+  polarOrgId: string;
 }

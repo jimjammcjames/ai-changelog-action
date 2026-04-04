@@ -3,10 +3,7 @@ import * as github from '@actions/github';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ActionInputs, CategoryConfig } from './types';
-import { getGitLog, detectRange, detectVersion, getRepoUrl, parseCommits } from './git';
-import { categorizeCommits } from './categorizer';
-import { formatChangelog } from './formatter';
-import { enhanceWithAI } from './ai';
+import { generateChangelog } from './core';
 
 function getInputs(): ActionInputs {
   let categories: CategoryConfig = {};
@@ -39,6 +36,9 @@ function getInputs(): ActionInputs {
     header: core.getInput('header') || '# Changelog',
     excludeTypes,
     maxCommits: parseInt(core.getInput('max-commits') || '500', 10),
+    outputFormat: (core.getInput('output-format') || 'markdown') as 'markdown' | 'json' | 'html',
+    licenseKey: core.getInput('license-key') || process.env.AI_CHANGELOG_LICENSE_KEY || '',
+    polarOrgId: core.getInput('polar-org-id') || process.env.POLAR_ORG_ID || '',
   };
 }
 
@@ -46,47 +46,26 @@ async function run(): Promise<void> {
   try {
     const inputs = getInputs();
 
-    core.info('🔍 Detecting commit range...');
-    const range = inputs.includeRange || await detectRange();
-    core.info(`📋 Range: ${range}`);
-
-    core.info('📖 Reading git log...');
-    const rawLog = await getGitLog(range, inputs.maxCommits);
-    const commits = parseCommits(rawLog);
-    core.info(`Found ${commits.length} commits`);
-
-    if (commits.length === 0) {
-      core.warning('No commits found in range. Generating empty changelog.');
-    }
-
-    const version = await detectVersion(range, inputs.version);
-    const repoUrl = await getRepoUrl();
-    core.info(`🏷️ Version: ${version}`);
-
-    let entries;
-    if (inputs.mode === 'ai' && inputs.aiApiKey) {
-      core.info('🤖 Enhancing with AI...');
-      try {
-        entries = await enhanceWithAI(commits, inputs.aiProvider, inputs.aiApiKey, inputs.aiModel);
-      } catch (err) {
-        core.warning(`AI enhancement failed, falling back to conventional: ${err}`);
-        entries = categorizeCommits(commits, inputs.categories, inputs.excludeTypes);
-      }
-    } else {
-      if (inputs.mode === 'ai' && !inputs.aiApiKey) {
-        core.warning('AI mode requested but no api-key provided. Falling back to conventional.');
-      }
-      entries = categorizeCommits(commits, inputs.categories, inputs.excludeTypes);
-    }
-
-    core.info('📝 Formatting changelog...');
-    const result = formatChangelog(entries, inputs, version, repoUrl, range);
+    const result = await generateChangelog(
+      inputs,
+      (msg) => core.info(msg),
+      (msg) => core.warning(msg),
+    );
 
     // Set outputs
-    core.setOutput('changelog', result.markdown);
-    core.setOutput('version', result.version);
-    core.setOutput('commit-count', result.commitCount.toString());
-    core.setOutput('categories-found', JSON.stringify(result.categoriesFound));
+    core.setOutput('changelog', result.changelog.markdown);
+    core.setOutput('version', result.changelog.version);
+    core.setOutput('commit-count', result.changelog.commitCount.toString());
+    core.setOutput('categories-found', JSON.stringify(result.changelog.categoriesFound));
+
+    if (result.premiumActive) {
+      if (result.breakingReport) {
+        core.setOutput('breaking-changes', JSON.stringify(result.breakingReport));
+      }
+      if (result.versionRecommendation) {
+        core.setOutput('version-recommendation', JSON.stringify(result.versionRecommendation));
+      }
+    }
 
     // Write to file
     if (inputs.output === 'file' || inputs.output === 'both') {
@@ -95,14 +74,13 @@ async function run(): Promise<void> {
 
       if (fs.existsSync(filePath)) {
         existingContent = fs.readFileSync(filePath, 'utf-8');
-        // Remove existing header to prepend new version
         const headerPattern = new RegExp(`^${escapeRegex(inputs.header)}\\n+`, 'm');
         existingContent = existingContent.replace(headerPattern, '');
       }
 
       const newContent = existingContent
-        ? `${result.markdown}\n${existingContent}`
-        : result.markdown;
+        ? `${result.changelog.markdown}\n${existingContent}`
+        : result.changelog.markdown;
 
       fs.writeFileSync(filePath, newContent, 'utf-8');
       core.info(`✅ Changelog written to ${inputs.changelogPath}`);
@@ -117,8 +95,7 @@ async function run(): Promise<void> {
         const octokit = github.getOctokit(token);
         const { owner, repo } = github.context.repo;
 
-        // Extract just the version content (without the top-level header)
-        const releaseBody = result.markdown
+        const releaseBody = result.changelog.markdown
           .replace(new RegExp(`^${escapeRegex(inputs.header)}\\n+`), '')
           .trim();
 
@@ -126,13 +103,13 @@ async function run(): Promise<void> {
           await octokit.rest.repos.createRelease({
             owner,
             repo,
-            tag_name: version,
-            name: version,
+            tag_name: result.changelog.version,
+            name: result.changelog.version,
             body: releaseBody,
             draft: false,
-            prerelease: version.includes('-'),
+            prerelease: result.changelog.version.includes('-'),
           });
-          core.info(`✅ GitHub release created for ${version}`);
+          core.info(`✅ GitHub release created for ${result.changelog.version}`);
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : String(err);
           core.warning(`Failed to create release: ${errMsg}`);
@@ -140,12 +117,11 @@ async function run(): Promise<void> {
       }
     }
 
-    // Always output to stdout
     if (inputs.output === 'stdout') {
-      process.stdout.write(result.markdown);
+      process.stdout.write(result.changelog.markdown);
     }
 
-    core.info(`🎉 Changelog generated: ${result.commitCount} commits in ${result.categoriesFound.length} categories`);
+    core.info(`🎉 Changelog generated: ${result.changelog.commitCount} commits in ${result.changelog.categoriesFound.length} categories`);
 
   } catch (error) {
     if (error instanceof Error) {

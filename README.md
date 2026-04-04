@@ -251,13 +251,35 @@ Non-conventional commits are heuristically categorized or placed under "📝 Oth
 
 | Tier | Price | What you get |
 |------|-------|-------------|
-| **Free** | $0 | Conventional commit mode — full-featured, no limits |
-| **AI-Enhanced** | Bring your own API key | OpenAI or Anthropic — you pay your provider directly |
+| **Free** | $0/forever | Conventional commit mode — full-featured, no limits |
+| **Pro** | $9/mo | AI-powered changelogs, breaking change detection, version advisor |
+| **Team** | $29/mo | Everything in Pro + unlimited repos, team license, priority support |
 
-<!-- TODO: Replace with Polar.sh checkout links when ready
-| **Pro** | $X/mo | Managed AI, priority support, team analytics |
-[Get Pro →](https://polar.sh/jimjammcjames/ai-changelog-action)
--->
+<!-- Checkout links — replace with real URLs after running: POLAR_ACCESS_TOKEN=<token> node scripts/setup-polar.js -->
+
+[Get Pro →](https://polar.sh/jimjammcjames/ai-changelog-action/subscriptions?tier=pro) · [Get Team →](https://polar.sh/jimjammcjames/ai-changelog-action/subscriptions?tier=team)
+
+### Using your license key
+
+After subscribing, you'll receive a license key via email. Add it to your workflow:
+
+```yaml
+      - uses: jimjammcjames/ai-changelog-action@v1
+        with:
+          license-key: ${{ secrets.AI_CHANGELOG_LICENSE_KEY }}
+          polar-org-id: '<your-org-id>'  # Optional, from Polar.sh dashboard
+```
+
+Or via CLI:
+
+```bash
+ai-changelog --license-key YOUR-KEY --breaking-report --version-recommend
+```
+
+Premium features include:
+- 🔍 **Breaking change detection** — detailed analysis of API-breaking commits
+- 📊 **Version advisor** — semantic version bump recommendation (major/minor/patch)
+- 🤖 **AI mode** — intelligent commit categorization via OpenAI or Anthropic
 
 ---
 
