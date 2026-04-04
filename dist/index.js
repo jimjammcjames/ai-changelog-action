@@ -30048,6 +30048,71 @@ async function enhanceWithAI(commits, provider, apiKey, model) {
 
 /***/ }),
 
+/***/ 3728:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.detectBreakingChanges = detectBreakingChanges;
+const BREAKING_INDICATORS = [
+    { pattern: /BREAKING[ -]CHANGE/i, reason: 'Conventional commit BREAKING CHANGE footer' },
+    { pattern: /\bremove[ds]?\b.*\b(api|endpoint|method|function|class|interface|param|field|column)\b/i, reason: 'Removal of public API surface' },
+    { pattern: /\b(api|endpoint|method|function|class|interface|param|field|column)\b.*\bremove[ds]?\b/i, reason: 'Removal of public API surface' },
+    { pattern: /\brename[ds]?\b.*\b(api|endpoint|method|function|class|interface|param|field|column)\b/i, reason: 'Rename of public API surface' },
+    { pattern: /\b(api|endpoint|method|function|class|interface|param|field|column)\b.*\brename[ds]?\b/i, reason: 'Rename of public API surface' },
+    { pattern: /\bmigrat(e|ion|ing)\b/i, reason: 'Migration required' },
+    { pattern: /\bdeprecate[ds]?\b/i, reason: 'Deprecation notice' },
+    { pattern: /\bdrop(ped|s)?\s+(support|compatibility)\b/i, reason: 'Dropped compatibility' },
+    { pattern: /\bbackward[s]?\s*(in)?compatible\b/i, reason: 'Backward compatibility change' },
+    { pattern: /\bminimum\s+(version|requirement)\b/i, reason: 'Minimum version requirement change' },
+];
+function detectBreakingChanges(commits) {
+    const changes = [];
+    for (const commit of commits) {
+        // Already flagged as breaking by conventional commit parser
+        if (commit.breaking) {
+            changes.push({
+                hash: commit.hash,
+                shortHash: commit.shortHash,
+                author: commit.author,
+                description: commit.description,
+                scope: commit.scope,
+                reason: commit.body.includes('BREAKING CHANGE') || commit.body.includes('BREAKING-CHANGE')
+                    ? 'Conventional commit BREAKING CHANGE footer'
+                    : 'Conventional commit breaking indicator (!)',
+            });
+            continue;
+        }
+        // Scan subject and body for breaking indicators
+        const textToScan = `${commit.subject} ${commit.body}`;
+        for (const indicator of BREAKING_INDICATORS) {
+            if (indicator.pattern.test(textToScan)) {
+                changes.push({
+                    hash: commit.hash,
+                    shortHash: commit.shortHash,
+                    author: commit.author,
+                    description: commit.description,
+                    scope: commit.scope,
+                    reason: indicator.reason,
+                });
+                break;
+            }
+        }
+    }
+    const summary = changes.length === 0
+        ? 'No breaking changes detected.'
+        : `Found ${changes.length} potential breaking change${changes.length > 1 ? 's' : ''}: ${changes.map(c => c.shortHash).join(', ')}`;
+    return {
+        hasBreakingChanges: changes.length > 0,
+        changes,
+        summary,
+    };
+}
+
+
+/***/ }),
+
 /***/ 8270:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -30137,6 +30202,83 @@ function groupByDate(entries) {
 
 /***/ }),
 
+/***/ 828:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.generateChangelog = generateChangelog;
+const git_1 = __nccwpck_require__(1243);
+const categorizer_1 = __nccwpck_require__(8270);
+const formatter_1 = __nccwpck_require__(1845);
+const ai_1 = __nccwpck_require__(2382);
+const license_1 = __nccwpck_require__(9764);
+const breaking_detect_1 = __nccwpck_require__(3728);
+const version_recommend_1 = __nccwpck_require__(1600);
+async function generateChangelog(inputs, log, warn) {
+    const info = log || (() => { });
+    const warning = warn || (() => { });
+    info('🔍 Detecting commit range...');
+    const range = inputs.includeRange || await (0, git_1.detectRange)();
+    info(`📋 Range: ${range}`);
+    info('📖 Reading git log...');
+    const rawLog = await (0, git_1.getGitLog)(range, inputs.maxCommits);
+    const commits = (0, git_1.parseCommits)(rawLog);
+    info(`Found ${commits.length} commits`);
+    if (commits.length === 0) {
+        warning('No commits found in range. Generating empty changelog.');
+    }
+    const version = await (0, git_1.detectVersion)(range, inputs.version);
+    const repoUrl = await (0, git_1.getRepoUrl)();
+    info(`🏷️ Version: ${version}`);
+    let entries;
+    if (inputs.mode === 'ai' && inputs.aiApiKey) {
+        info('🤖 Enhancing with AI...');
+        try {
+            entries = await (0, ai_1.enhanceWithAI)(commits, inputs.aiProvider, inputs.aiApiKey, inputs.aiModel);
+        }
+        catch (err) {
+            warning(`AI enhancement failed, falling back to conventional: ${err}`);
+            entries = (0, categorizer_1.categorizeCommits)(commits, inputs.categories, inputs.excludeTypes);
+        }
+    }
+    else {
+        if (inputs.mode === 'ai' && !inputs.aiApiKey) {
+            warning('AI mode requested but no api-key provided. Falling back to conventional.');
+        }
+        entries = (0, categorizer_1.categorizeCommits)(commits, inputs.categories, inputs.excludeTypes);
+    }
+    // Check premium features via Polar.sh
+    const licenseResult = await (0, license_1.validateLicense)(inputs.licenseKey, inputs.polarOrgId);
+    const premiumActive = licenseResult.valid;
+    if (licenseResult.error && inputs.licenseKey) {
+        warning(`License validation: ${licenseResult.error}`);
+    }
+    let breakingReport;
+    let versionRecommendation;
+    if (premiumActive) {
+        info('🔑 Premium features activated');
+        breakingReport = (0, breaking_detect_1.detectBreakingChanges)(commits);
+        if (breakingReport.hasBreakingChanges) {
+            info(`⚠️ ${breakingReport.summary}`);
+        }
+        versionRecommendation = (0, version_recommend_1.recommendVersion)(entries, breakingReport, version);
+        info(`📊 Recommended bump: ${versionRecommendation.bump} → ${versionRecommendation.recommendedVersion || 'N/A'}`);
+    }
+    info('📝 Formatting changelog...');
+    const result = (0, formatter_1.formatChangelog)(entries, inputs, version, repoUrl, range);
+    return {
+        changelog: result,
+        breakingReport,
+        versionRecommendation,
+        premiumActive,
+    };
+}
+
+
+/***/ }),
+
 /***/ 1845:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -30144,17 +30286,50 @@ function groupByDate(entries) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.formatChangelog = formatChangelog;
+exports.formatJSON = formatJSON;
+exports.formatHTML = formatHTML;
 const categorizer_1 = __nccwpck_require__(8270);
+function buildGroups(entries, inputs) {
+    switch (inputs.groupBy) {
+        case 'scope':
+            return (0, categorizer_1.groupByScope)(entries);
+        case 'date':
+            return (0, categorizer_1.groupByDate)(entries);
+        default:
+            return (0, categorizer_1.groupByCategory)(entries);
+    }
+}
+function resolveLabel(key, inputs) {
+    return inputs.groupBy === 'category'
+        ? (key === '💥 Breaking Changes' ? key : (0, categorizer_1.getCategoryLabel)(key, inputs.categories))
+        : key;
+}
 function formatChangelog(entries, inputs, version, repoUrl, range) {
+    const markdown = formatMarkdown(entries, inputs, version, repoUrl, range);
+    const groups = buildGroups(entries, inputs);
+    const categoriesFound = [...groups.keys()].map(k => resolveLabel(k, inputs));
+    const result = {
+        markdown,
+        version,
+        commitCount: entries.length,
+        categoriesFound,
+    };
+    const format = inputs.outputFormat || 'markdown';
+    if (format === 'json' || format === 'html') {
+        result.json = formatJSON(entries, inputs, version, groups);
+    }
+    if (format === 'html') {
+        result.html = formatHTML(entries, inputs, version, repoUrl, range, groups);
+    }
+    return result;
+}
+function formatMarkdown(entries, inputs, version, repoUrl, range) {
     const lines = [];
-    // Header
     lines.push(inputs.header);
     lines.push('');
-    // Version heading
     const date = new Date().toISOString().split('T')[0];
     lines.push(`## ${version} (${date})`);
     lines.push('');
-    // Compare link
     if (inputs.includeCompareLink && repoUrl && range.includes('..')) {
         const [from, to] = range.split('..');
         lines.push(`[Full diff](${repoUrl}/compare/${from}...${to || 'HEAD'})`);
@@ -30162,32 +30337,11 @@ function formatChangelog(entries, inputs, version, repoUrl, range) {
     }
     if (entries.length === 0) {
         lines.push('_No notable changes in this release._');
-        const categoriesFound = [];
-        return {
-            markdown: lines.join('\n'),
-            version,
-            commitCount: 0,
-            categoriesFound,
-        };
+        return lines.join('\n');
     }
-    // Group entries
-    let groups;
-    switch (inputs.groupBy) {
-        case 'scope':
-            groups = (0, categorizer_1.groupByScope)(entries);
-            break;
-        case 'date':
-            groups = (0, categorizer_1.groupByDate)(entries);
-            break;
-        default:
-            groups = (0, categorizer_1.groupByCategory)(entries);
-    }
-    const categoriesFound = [];
+    const groups = buildGroups(entries, inputs);
     for (const [key, groupEntries] of groups) {
-        const label = inputs.groupBy === 'category'
-            ? (key === '💥 Breaking Changes' ? key : (0, categorizer_1.getCategoryLabel)(key, inputs.categories))
-            : key;
-        categoriesFound.push(label);
+        const label = resolveLabel(key, inputs);
         lines.push(`### ${label}`);
         lines.push('');
         for (const entry of groupEntries) {
@@ -30196,18 +30350,15 @@ function formatChangelog(entries, inputs, version, repoUrl, range) {
                 line += `**${entry.scope}:** `;
             }
             line += entry.description;
-            // PR link
             if (entry.prNumber && inputs.includePrLinks && repoUrl) {
                 line += ` ([#${entry.prNumber}](${repoUrl}/pull/${entry.prNumber}))`;
             }
-            // Commit hash
             if (repoUrl) {
                 line += ` ([${entry.shortHash}](${repoUrl}/commit/${entry.hash}))`;
             }
             else {
                 line += ` (${entry.shortHash})`;
             }
-            // Author
             if (inputs.includeAuthors) {
                 line += ` — @${entry.author}`;
             }
@@ -30215,12 +30366,73 @@ function formatChangelog(entries, inputs, version, repoUrl, range) {
         }
         lines.push('');
     }
+    return lines.join('\n');
+}
+function formatJSON(entries, inputs, version, groups) {
+    const resolvedGroups = groups || buildGroups(entries, inputs);
+    const date = new Date().toISOString().split('T')[0];
+    const sections = [...resolvedGroups.entries()].map(([key, groupEntries]) => ({
+        category: resolveLabel(key, inputs),
+        entries: groupEntries,
+    }));
     return {
-        markdown: lines.join('\n'),
         version,
+        date,
+        sections,
         commitCount: entries.length,
-        categoriesFound,
     };
+}
+function formatHTML(entries, inputs, version, repoUrl, range, groups) {
+    const resolvedGroups = groups || buildGroups(entries, inputs);
+    const date = new Date().toISOString().split('T')[0];
+    const lines = [];
+    lines.push('<!DOCTYPE html>');
+    lines.push('<html lang="en"><head><meta charset="UTF-8">');
+    lines.push(`<title>Changelog ${esc(version)}</title>`);
+    lines.push('<style>body{font-family:system-ui,sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem;color:#1a1a1a}h1{border-bottom:2px solid #eee;padding-bottom:.5rem}h2{color:#333}h3{color:#555}ul{padding-left:1.5rem}li{margin:.25rem 0}a{color:#0969da}.scope{font-weight:700}.author{color:#666;font-size:.9em}.breaking{color:#d1242f;font-weight:700}</style>');
+    lines.push('</head><body>');
+    lines.push(`<h1>${esc(inputs.header.replace(/^#\s*/, ''))}</h1>`);
+    lines.push(`<h2>${esc(version)} <small>(${esc(date)})</small></h2>`);
+    if (inputs.includeCompareLink && repoUrl && range.includes('..')) {
+        const [from, to] = range.split('..');
+        lines.push(`<p><a href="${esc(repoUrl)}/compare/${esc(from)}...${esc(to || 'HEAD')}">Full diff</a></p>`);
+    }
+    if (entries.length === 0) {
+        lines.push('<p><em>No notable changes in this release.</em></p>');
+    }
+    else {
+        for (const [key, groupEntries] of resolvedGroups) {
+            const label = resolveLabel(key, inputs);
+            lines.push(`<h3>${esc(label)}</h3>`);
+            lines.push('<ul>');
+            for (const entry of groupEntries) {
+                let li = '';
+                if (entry.scope && inputs.groupBy !== 'scope') {
+                    li += `<span class="scope">${esc(entry.scope)}:</span> `;
+                }
+                li += esc(entry.description);
+                if (entry.prNumber && inputs.includePrLinks && repoUrl) {
+                    li += ` (<a href="${esc(repoUrl)}/pull/${esc(entry.prNumber)}">#${esc(entry.prNumber)}</a>)`;
+                }
+                if (repoUrl) {
+                    li += ` (<a href="${esc(repoUrl)}/commit/${esc(entry.hash)}">${esc(entry.shortHash)}</a>)`;
+                }
+                else {
+                    li += ` (${esc(entry.shortHash)})`;
+                }
+                if (inputs.includeAuthors) {
+                    li += ` <span class="author">— @${esc(entry.author)}</span>`;
+                }
+                lines.push(`<li>${li}</li>`);
+            }
+            lines.push('</ul>');
+        }
+    }
+    lines.push('</body></html>');
+    return lines.join('\n');
+}
+function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 
@@ -30478,10 +30690,7 @@ const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const fs = __importStar(__nccwpck_require__(9896));
 const path = __importStar(__nccwpck_require__(6928));
-const git_1 = __nccwpck_require__(1243);
-const categorizer_1 = __nccwpck_require__(8270);
-const formatter_1 = __nccwpck_require__(1845);
-const ai_1 = __nccwpck_require__(2382);
+const core_1 = __nccwpck_require__(828);
 function getInputs() {
     let categories = {};
     const categoriesRaw = core.getInput('categories');
@@ -30512,61 +30721,40 @@ function getInputs() {
         header: core.getInput('header') || '# Changelog',
         excludeTypes,
         maxCommits: parseInt(core.getInput('max-commits') || '500', 10),
+        outputFormat: (core.getInput('output-format') || 'markdown'),
+        licenseKey: core.getInput('license-key') || process.env.AI_CHANGELOG_LICENSE_KEY || '',
+        polarOrgId: core.getInput('polar-org-id') || process.env.POLAR_ORG_ID || '',
     };
 }
 async function run() {
     try {
         const inputs = getInputs();
-        core.info('🔍 Detecting commit range...');
-        const range = inputs.includeRange || await (0, git_1.detectRange)();
-        core.info(`📋 Range: ${range}`);
-        core.info('📖 Reading git log...');
-        const rawLog = await (0, git_1.getGitLog)(range, inputs.maxCommits);
-        const commits = (0, git_1.parseCommits)(rawLog);
-        core.info(`Found ${commits.length} commits`);
-        if (commits.length === 0) {
-            core.warning('No commits found in range. Generating empty changelog.');
-        }
-        const version = await (0, git_1.detectVersion)(range, inputs.version);
-        const repoUrl = await (0, git_1.getRepoUrl)();
-        core.info(`🏷️ Version: ${version}`);
-        let entries;
-        if (inputs.mode === 'ai' && inputs.aiApiKey) {
-            core.info('🤖 Enhancing with AI...');
-            try {
-                entries = await (0, ai_1.enhanceWithAI)(commits, inputs.aiProvider, inputs.aiApiKey, inputs.aiModel);
-            }
-            catch (err) {
-                core.warning(`AI enhancement failed, falling back to conventional: ${err}`);
-                entries = (0, categorizer_1.categorizeCommits)(commits, inputs.categories, inputs.excludeTypes);
-            }
-        }
-        else {
-            if (inputs.mode === 'ai' && !inputs.aiApiKey) {
-                core.warning('AI mode requested but no api-key provided. Falling back to conventional.');
-            }
-            entries = (0, categorizer_1.categorizeCommits)(commits, inputs.categories, inputs.excludeTypes);
-        }
-        core.info('📝 Formatting changelog...');
-        const result = (0, formatter_1.formatChangelog)(entries, inputs, version, repoUrl, range);
+        const result = await (0, core_1.generateChangelog)(inputs, (msg) => core.info(msg), (msg) => core.warning(msg));
         // Set outputs
-        core.setOutput('changelog', result.markdown);
-        core.setOutput('version', result.version);
-        core.setOutput('commit-count', result.commitCount.toString());
-        core.setOutput('categories-found', JSON.stringify(result.categoriesFound));
+        core.setOutput('changelog', result.changelog.markdown);
+        core.setOutput('version', result.changelog.version);
+        core.setOutput('commit-count', result.changelog.commitCount.toString());
+        core.setOutput('categories-found', JSON.stringify(result.changelog.categoriesFound));
+        if (result.premiumActive) {
+            if (result.breakingReport) {
+                core.setOutput('breaking-changes', JSON.stringify(result.breakingReport));
+            }
+            if (result.versionRecommendation) {
+                core.setOutput('version-recommendation', JSON.stringify(result.versionRecommendation));
+            }
+        }
         // Write to file
         if (inputs.output === 'file' || inputs.output === 'both') {
             const filePath = path.resolve(inputs.changelogPath);
             let existingContent = '';
             if (fs.existsSync(filePath)) {
                 existingContent = fs.readFileSync(filePath, 'utf-8');
-                // Remove existing header to prepend new version
                 const headerPattern = new RegExp(`^${escapeRegex(inputs.header)}\\n+`, 'm');
                 existingContent = existingContent.replace(headerPattern, '');
             }
             const newContent = existingContent
-                ? `${result.markdown}\n${existingContent}`
-                : result.markdown;
+                ? `${result.changelog.markdown}\n${existingContent}`
+                : result.changelog.markdown;
             fs.writeFileSync(filePath, newContent, 'utf-8');
             core.info(`✅ Changelog written to ${inputs.changelogPath}`);
         }
@@ -30579,21 +30767,20 @@ async function run() {
             else {
                 const octokit = github.getOctokit(token);
                 const { owner, repo } = github.context.repo;
-                // Extract just the version content (without the top-level header)
-                const releaseBody = result.markdown
+                const releaseBody = result.changelog.markdown
                     .replace(new RegExp(`^${escapeRegex(inputs.header)}\\n+`), '')
                     .trim();
                 try {
                     await octokit.rest.repos.createRelease({
                         owner,
                         repo,
-                        tag_name: version,
-                        name: version,
+                        tag_name: result.changelog.version,
+                        name: result.changelog.version,
                         body: releaseBody,
                         draft: false,
-                        prerelease: version.includes('-'),
+                        prerelease: result.changelog.version.includes('-'),
                     });
-                    core.info(`✅ GitHub release created for ${version}`);
+                    core.info(`✅ GitHub release created for ${result.changelog.version}`);
                 }
                 catch (err) {
                     const errMsg = err instanceof Error ? err.message : String(err);
@@ -30601,11 +30788,10 @@ async function run() {
                 }
             }
         }
-        // Always output to stdout
         if (inputs.output === 'stdout') {
-            process.stdout.write(result.markdown);
+            process.stdout.write(result.changelog.markdown);
         }
-        core.info(`🎉 Changelog generated: ${result.commitCount} commits in ${result.categoriesFound.length} categories`);
+        core.info(`🎉 Changelog generated: ${result.changelog.commitCount} commits in ${result.changelog.categoriesFound.length} categories`);
     }
     catch (error) {
         if (error instanceof Error) {
@@ -30620,6 +30806,215 @@ function escapeRegex(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 run();
+
+
+/***/ }),
+
+/***/ 9764:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PREMIUM_FEATURES = void 0;
+exports.validateLicense = validateLicense;
+exports.hasFeatureAccess = hasFeatureAccess;
+const https = __importStar(__nccwpck_require__(5692));
+const POLAR_API_BASE = 'https://api.polar.sh';
+const VALIDATION_PATH = '/v1/customer-portal/license-keys/validate';
+const TIER_PATTERNS = [
+    { pattern: /\bteam\b/i, tier: 'team' },
+    { pattern: /\bpro\b/i, tier: 'pro' },
+];
+function detectTier(benefit) {
+    if (!benefit?.description)
+        return 'pro';
+    for (const { pattern, tier } of TIER_PATTERNS) {
+        if (pattern.test(benefit.description))
+            return tier;
+    }
+    return 'pro';
+}
+/**
+ * Validate a Polar.sh-issued license key via the public customer-portal
+ * endpoint (no server-side access token required — safe from CI runners).
+ */
+async function validateLicense(key, orgId) {
+    if (!key || key.trim().length === 0) {
+        return { valid: false, tier: 'free', error: 'No license key provided' };
+    }
+    const body = { key: key.trim() };
+    if (orgId)
+        body.organization_id = orgId;
+    const payload = JSON.stringify(body);
+    return new Promise((resolve) => {
+        const req = https.request({
+            hostname: new URL(POLAR_API_BASE).hostname,
+            path: VALIDATION_PATH,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload),
+            },
+            timeout: 10_000,
+        }, (res) => {
+            let data = '';
+            res.on('data', (chunk) => (data += chunk));
+            res.on('end', () => {
+                try {
+                    if (res.statusCode === 200) {
+                        const parsed = JSON.parse(data);
+                        if (parsed.status === 'granted') {
+                            resolve({
+                                valid: true,
+                                tier: detectTier(parsed.benefit),
+                                customerId: parsed.customer_id,
+                                expiresAt: parsed.expires_at ?? undefined,
+                            });
+                        }
+                        else {
+                            resolve({
+                                valid: false,
+                                tier: 'free',
+                                error: `License key status: ${parsed.status}`,
+                            });
+                        }
+                    }
+                    else {
+                        const msg = tryParseError(data) || `HTTP ${res.statusCode}`;
+                        resolve({ valid: false, tier: 'free', error: msg });
+                    }
+                }
+                catch {
+                    resolve({ valid: false, tier: 'free', error: 'Invalid response from license server' });
+                }
+            });
+        });
+        req.on('error', (err) => {
+            resolve({ valid: false, tier: 'free', error: `Network error: ${err.message}` });
+        });
+        req.on('timeout', () => {
+            req.destroy();
+            resolve({ valid: false, tier: 'free', error: 'License validation request timed out' });
+        });
+        req.write(payload);
+        req.end();
+    });
+}
+function tryParseError(body) {
+    try {
+        const parsed = JSON.parse(body);
+        return parsed.detail ?? parsed.message ?? parsed.error ?? null;
+    }
+    catch {
+        return null;
+    }
+}
+exports.PREMIUM_FEATURES = ['ai', 'multi-format'];
+/** Check whether a given license tier grants access to a premium feature. */
+function hasFeatureAccess(tier, feature) {
+    if (tier === 'team' || tier === 'pro')
+        return true;
+    return false;
+}
+
+
+/***/ }),
+
+/***/ 1600:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseSemver = parseSemver;
+exports.bumpVersion = bumpVersion;
+exports.recommendVersion = recommendVersion;
+const SEMVER_REGEX = /^v?(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/;
+function parseSemver(version) {
+    const match = version.match(SEMVER_REGEX);
+    if (!match)
+        return null;
+    return {
+        major: parseInt(match[1], 10),
+        minor: parseInt(match[2], 10),
+        patch: parseInt(match[3], 10),
+        prerelease: match[4] || '',
+    };
+}
+function bumpVersion(version, bump) {
+    const parsed = parseSemver(version);
+    if (!parsed)
+        return version;
+    const prefix = version.startsWith('v') ? 'v' : '';
+    switch (bump) {
+        case 'major':
+            return `${prefix}${parsed.major + 1}.0.0`;
+        case 'minor':
+            return `${prefix}${parsed.major}.${parsed.minor + 1}.0`;
+        case 'patch':
+            return `${prefix}${parsed.major}.${parsed.minor}.${parsed.patch + 1}`;
+    }
+}
+function recommendVersion(entries, breakingReport, currentVersion) {
+    const parsed = parseSemver(currentVersion);
+    if (breakingReport.hasBreakingChanges) {
+        return {
+            bump: 'major',
+            reason: `Breaking changes detected: ${breakingReport.summary}`,
+            currentVersion,
+            recommendedVersion: parsed ? bumpVersion(currentVersion, 'major') : null,
+        };
+    }
+    const hasFeatures = entries.some(e => e.type === 'feat');
+    if (hasFeatures) {
+        return {
+            bump: 'minor',
+            reason: 'New features added without breaking changes',
+            currentVersion,
+            recommendedVersion: parsed ? bumpVersion(currentVersion, 'minor') : null,
+        };
+    }
+    return {
+        bump: 'patch',
+        reason: 'Bug fixes and maintenance changes only',
+        currentVersion,
+        recommendedVersion: parsed ? bumpVersion(currentVersion, 'patch') : null,
+    };
+}
 
 
 /***/ }),
